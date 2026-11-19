@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#e8630a">
+<title>NFSU2 Save Editor</title>
+<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171b22'/%3E%3Ctext x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%23ff7a1f'%3EN%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #eef1f6; --panel: #ffffff; --line: #d3d9e4; --fg: #141a26; --muted: #5b6577;
+  --accent: #e8630a; --accent-fg: #ffffff; --field: #f6f8fb;
+  --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+  --cell-0: #f1f4f8; --cell-done: #fde4cf;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d111a; --panel: #151b28; --line: #273044; --fg: #e7ebf3; --muted: #8d97ab;
+    --accent: #ff7a1f; --accent-fg: #160a00; --field: #0f1520;
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    --cell-0: #1b2333; --cell-done: #3a2412; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+#editor { display: grid; gap: 16px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; }
+main {
+  max-width: 880px; margin: 0 auto; display: grid; gap: 16px;
+  padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header h1 { font-size: 28px; font-weight: 700; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+header h1 span { color: var(--accent); }
+header p { color: var(--muted); margin: 4px 0 0; max-width: 70ch; }
+h2 { font-size: 13px; font-weight: 700; margin: 0; color: var(--accent); text-transform: uppercase; letter-spacing: .1em; }
+.sub { color: var(--muted); margin: 0; max-width: 70ch; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; letter-spacing: .02em; }
+input, select, button { font: inherit; color: var(--fg); background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+input:focus-visible, select:focus-visible, button:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+button:disabled { cursor: default; opacity: .8; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.row > div { flex: 1 1 180px; min-width: 0; }
+.row input, .row select { width: 100%; }
+.drop { border: 2px dashed var(--line); border-radius: 8px; padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--field); }
+.drop strong { color: var(--fg); display: block; font-size: 15px; margin-bottom: 4px; }
+.drop.over { border-color: var(--accent); color: var(--fg); }
+.mono { font-family: var(--mono); font-size: 13px; }
+.status { font-size: 13px; min-height: 1.5em; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+td, th { padding: 6px; border-bottom: 1px solid var(--line); text-align: left; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td input { width: 100%; padding: 4px 6px; min-width: 110px; }
+#unlocks td:first-child { min-width: 170px; }
+#unlocks td button { width: 100%; min-width: 58px; background: var(--cell-0); font-family: var(--mono); font-size: 12px; padding: 6px 4px; }
+#unlocks td button.done { background: var(--cell-done); color: var(--accent); border-color: transparent; font-weight: 600; }
+#unlocks td button.all { font-family: inherit; white-space: nowrap; }
+.quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.hex { white-space: pre; overflow-x: auto; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.note { font-size: 13px; color: var(--muted); border-left: 3px solid var(--accent); padding-left: 10px; margin: 0; max-width: 70ch; }
+footer { color: var(--muted); font-size: 12px; }
+footer a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>NFSU2 <span>Save</span> Editor</h1>
+    <p>Open a Need for Speed: Underground 2 profile save (the file named after the profile, such as
+      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, save mode,
+      difficulty and more, then save a copy. The file never leaves your browser. The checksums are made
+      again the way the game writes them.</p>
+  </header>
+
+  <section>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a profile file">
+      <strong>Drop a profile file here, or click to choose one</strong>
+      No file extension, 54,966 bytes, starts with "20CM"
+      <input type="file" id="file" hidden>
+    </div>
+    <div class="status" id="loadStatus"></div>
+  </section>
+
+  <div id="editor" hidden style="display:grid;gap:16px">
+    <section>
+      <h2>Profile</h2>
+      <div class="row">
+        <div>
+          <label for="name">Profile name (offset 0xD225)</label>
+          <input id="name" class="mono" readonly>
+        </div>
+        <div>
+          <label for="cash">Cash (offset 0xA16A)</label>
+          <input id="cash" type="number" min="0" max="4294967295" step="1">
+        </div>
+      </div>
+      <div class="quick">
+        <button data-cash="1000000">$1M</button>
+        <button data-cash="10000000">$10M</button>
+        <button data-cash="99999999">$99,999,999</button>
+        <button data-cash="999999999">$999,999,999</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="saveMode">Save (Options, Gameplay, Save)</label>
+          <select id="saveMode">
+            <option value="autosave">Autosave</option>
+            <option value="prompt">Prompt</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div>
+          <label for="difficulty">Career difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+      </div>
+      <p class="sub">The name is stored in the profile; the folder and file must keep the same name, so
+        rename all three if you want a different one.</p>
+    </section>
+
+    <section>
+      <h2>Unlocks</h2>
+      <p class="sub">Sets the same unlock bitfields as the 2005 NFSU2 Profile Creator. Columns are the
+        career's five stages; each cell shows how many bits are already set. Click a cell to unlock that
+        stage. Bytes are set to 0xFF (every bit), as the Profile Creator does.</p>
+      <div class="scroll">
+        <table id="unlocks"><thead><tr><th>Category</th><th>Stage 1</th><th>Stage 2</th><th>Stage 3</th><th>Stage 4</th><th>Stage 5</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="quick"><button class="primary" id="unlockAll">Unlock everything</button></div>
+      <p class="note">If widebody kits stay locked after unlocking all five stages of body parts, the game
+        may also want that stage's unique-part reward, which this does not set.</p>
+    </section>
+
+    <section>
+      <h2>Cars in this profile</h2>
+      <p class="sub">Read-only view of the career, customized and preset cars stored in the save. Type names
+        come from the game's own car table; a hash that is not one of them is a mod car.</p>
+      <div class="scroll">
+        <table id="cars"><thead><tr><th>Slot</th><th>Type</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Values at 0xD155</h2>
+      <p class="sub">Sixteen values stored next to the profile name. Their meaning is not mapped yet, so
+        change them with care. The first one reads as a float; the rest look like integers.</p>
+      <div class="scroll">
+        <table id="stats"><thead><tr><th>Offset</th><th>As integer</th><th>As float</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Raw value at offset</h2>
+      <div class="row">
+        <div><label for="rOff">Offset (hex)</label><input id="rOff" class="mono" value="A16A"></div>
+        <div><label for="rType">Type</label>
+          <select id="rType"><option value="i32">int32</option><option value="u32">uint32</option><option value="u16">uint16</option><option value="u8">uint8</option><option value="f32">float32</option></select>
+        </div>
+        <div><label for="rVal">Value</label><input id="rVal" class="mono"></div>
+        <div class="quick" style="flex:0 0 auto"><button id="rRead">Read</button><button id="rWrite">Write</button></div>
+      </div>
+      <div class="hex mono" id="hex"></div>
+    </section>
+
+    <section>
+      <h2>Save</h2>
+      <div class="quick">
+        <button class="primary" id="save">Save edited profile</button>
+        <button id="revert">Revert all changes</button>
+      </div>
+      <div class="status" id="saveStatus"></div>
+      <p class="sub">The download has the profile's original file name (no extension) and its three
+        checksums made again, so the game accepts it. Back up the original first, then replace the file in
+        the profile's folder.</p>
+    </section>
+  </div>
+
+  <footer>
+    <p>Format and checksums from <a href="https://github.com/th0mk/nfsu2-web" target="_blank" rel="noopener">th0mk/nfsu2-web</a>
+      (MIT), based on <a href="https://github.com/TalhaMudo/NFSU2Recomp" target="_blank" rel="noopener">NFSU2Recomp</a>
+      and the clean-room <a href="https://github.com/whoismept/OpenUG2" target="_blank" rel="noopener">OpenUG2</a> spec.
+      Unlock runs from NFSU2 Profile Creator 1.1. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
+  </footer>
+</main>
+<script type="module">
+// NFSU2 profile save format, from the clean-room description in
+// th0mk/nfsu2-web (MIT) web/src/app/profile.ts and the OpenUG2 SPEC §3.2-3.5.
+//
+//   0  "20CM"   4 u32 size   8 u32 sizeA=8   12 u32 sizeB=54930
+//   16 checksum(A)  20 checksum(B)  24 checksum(bytes 0..23)
+//   28 block A: u32 version 0x10D, u32 payload size 54930
+//   36 block B: the payload
+//
+// Payload offsets (add 36 for file offsets):
+//   1156   20 custom cars, 1072 bytes each (type hash at +28)
+//   22596  5 career cars, 2034 bytes each (type hash at +28, owned at +1073)
+//   32770  6 preset cars, 1076 bytes each (type hash at +28)
+//   50979  u32 difficulty (0 easy, 1 medium, 2 hard)
+//   50987  u8 autosave, 50988 u8 save prompt
+//   53761  name, 32 bytes NUL-padded
+// and the bank at file 0xA16A (payload 41286).
+//
+// The checksum is CRC-32/BZIP2 over D[0..n-5] XOR the big-endian u32 in
+// D[n-4..n-1]; stored little-endian.
+
+const FILE_SIZE = 54966;
+const PAYLOAD = 54930;
+const VERSION = 0x10D;
+const B = 36;
+
+const NAME = 0xD225;          // file offset; 32-byte field
+const MONEY = 0xA16A;         // file offset; u32 bank
+const STATS = 0xD155;         // 16 unmapped i32 values
+const AUTOSAVE = B + 50987;
+const PROMPT = B + 50988;
+const DIFFICULTY = B + 50979;
+
+const CRC_T = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let r = i << 24;
+    for (let k = 0; k < 8; k++) r = (r & 0x80000000) ? ((r << 1) ^ 0x04C11DB7) : (r << 1);
+    t[i] = r >>> 0;
+  }
+  return t;
+})();
+
+/** The game's checksum of a block (SPEC §3.4); 0 below 4 bytes. */
+function checksum(d) {
+  if (d.length < 4) return 0;
+  let r = ~((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]) >>> 0;
+  for (let i = 4; i < d.length; i++) r = (((r << 8) | d[i]) ^ CRC_T[r >>> 24]) >>> 0;
+  return ~r >>> 0;
+}
+
+const view = buf => new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+
+/** Make the three checksums again, in place (block A, block B, then the header over 0..23). */
+function seal(buf) {
+  const dv = view(buf);
+  dv.setUint32(16, checksum(buf.subarray(28, B)), true);
+  dv.setUint32(20, checksum(buf.subarray(B)), true);
+  dv.setUint32(24, checksum(buf.subarray(0, 24)), true);
+  return buf;
+}
+
+/** Whether the file's stored checksums hold. */
+function isSealed(buf) {
+  if (buf.length !== FILE_SIZE) return false;
+  const dv = view(buf);
+  return dv.getUint32(16, true) === checksum(buf.subarray(28, B)) &&
+    dv.getUint32(20, true) === checksum(buf.subarray(B)) &&
+    dv.getUint32(24, true) === checksum(buf.subarray(0, 24));
+}
+
+/** Why a file is not a profile of this version (empty when it is); sealed is separate. */
+function checkShape(buf) {
+  const errors = [];
+  if (buf.length < 4 || String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== '20CM')
+    errors.push('This is not an NFSU2 profile: it does not start with "20CM".');
+  if (buf.length !== FILE_SIZE)
+    errors.push(`Expected a ${FILE_SIZE.toLocaleString()} byte profile, got ${buf.length.toLocaleString()} bytes.`);
+  if (buf.length >= 36) {
+    const dv = view(buf);
+    if (dv.getUint32(4, true) !== buf.length) errors.push('The size in the header does not match the file.');
+    if (dv.getUint32(8, true) !== 8) errors.push('Unexpected block A size.');
+    if (dv.getUint32(12, true) !== PAYLOAD) errors.push('Unexpected block B size.');
+    if (dv.getUint32(28, true) !== VERSION) errors.push(`Saved by another version of the game (0x${dv.getUint32(28, true).toString(16)}, expected 0x10D).`);
+    if (dv.getUint32(32, true) !== PAYLOAD) errors.push('Unexpected payload size.');
+  }
+  return errors;
+}
+
+/** Shape errors, plus a warning when the checksums are stale (edited elsewhere). */
+function inspect(buf) {
+  const errors = checkShape(buf);
+  if (errors.length) return { errors, sealed: false };
+  return { errors, sealed: isSealed(buf) };
+}
+
+function readName(buf) {
+  let s = '';
+  for (let i = 0; i < 32 && NAME + i < buf.length; i++) {
+    const c = buf[NAME + i];
+    if (!c) break;
+    s += String.fromCharCode(c);
+  }
+  return s;
+}
+
+function readMoney(buf) { return view(buf).getUint32(MONEY, true); }
+function writeMoney(buf, n) {
+  view(buf).setUint32(MONEY, Math.max(0, Math.min(0xFFFFFFFF, Math.trunc(n))) >>> 0, true);
+}
+
+function readSaveMode(buf) {
+  const a = buf[AUTOSAVE], p = buf[PROMPT];
+  return a === 1 ? 'autosave' : p === 1 ? 'prompt' : 'off';
+}
+function writeSaveMode(buf, mode) {
+  buf[AUTOSAVE] = mode === 'autosave' ? 1 : 0;
+  buf[PROMPT] = mode === 'autosave' || mode === 'prompt' ? 1 : 0;
+}
+
+function readDifficulty(buf) {
+  const n = view(buf).getUint32(DIFFICULTY, true);
+  return n === 2 ? 'hard' : n === 1 ? 'medium' : 'easy';
+}
+function writeDifficulty(buf, d) {
+  view(buf).setUint32(DIFFICULTY, d === 'hard' ? 2 : d === 'medium' ? 1 : 0, true);
+}
+
+// ------------------------------------------------------------------ unlocks --
+// [file offset, length] runs of unlock bitfield bytes, from NFSU2 Profile
+// Creator 1.1's data resources.  A byte is a bitmask (0xFF = all 8 unlocked).
+// The runs repeat every 0x7F2 bytes; 0x5B00 is the first stage's block.
+const UNLOCK_RUNS = {
+  body: [[23763,20],[23791,8],[24075,100],[24207,48],[24327,28],[24359,8],[24371,8],[25797,20],[25825,8],[26109,100],[26241,48],[26361,28],[26393,8],[26405,8],[27831,20],[27859,8],[28143,100],[28275,48],[28395,28],[28427,8],[28439,8],[29865,20],[29893,8],[30177,100],[30309,48],[30429,28],[30461,8],[30473,8],[31899,20],[31927,8],[32211,100],[32343,48],[32463,28],[32495,8],[32507,8]],
+  graphics: [[23871,112],[25905,112],[27939,112],[29973,112],[32007,112]],
+  perf: [[24055,8],[26089,8],[28123,8],[30157,8],[32191,8]],
+  special: [[23799,16],[23819,4],[23827,12],[23847,8],[24175,32],[24651,8],[25833,16],[25853,4],[25861,12],[25881,8],[26209,32],[26685,8],[27867,16],[27887,4],[27895,12],[27915,8],[28243,32],[28719,8],[29901,16],[29921,4],[29929,12],[29949,8],[30277,32],[30753,8],[31935,16],[31955,4],[31963,12],[31983,8],[32311,32],[32787,8]],
+};
+
+const UNLOCK_NAMES = {
+  body: 'Body parts, incl. widebody',
+  graphics: 'Graphics: vinyls, decals, paint',
+  perf: 'Performance',
+  special: 'Specialties: neon, audio, doors',
+};
+
+const stageOf = o => Math.floor((o - 0x5B00) / 0x7F2);
+
+function unlockBytes(cat, stage) {
+  const out = [];
+  for (const [o, n] of UNLOCK_RUNS[cat])
+    if (stage == null || stageOf(o) === stage)
+      for (let i = 0; i < n; i++) out.push(o + i);
+  return out;
+}
+
+function unlockStage(buf, cat, stage) {
+  for (const o of unlockBytes(cat, stage)) buf[o] = 0xFF;
+}
+
+function unlockAll(buf) {
+  for (const cat of Object.keys(UNLOCK_RUNS)) unlockStage(buf, cat, null);
+}
+
+const popcount = b => {
+  let c = 0;
+  while (b) { c += b & 1; b >>= 1; }
+  return c;
+};
+
+/** Percent of bits set in a category's stage (0..4), or all stages when stage is null. */
+function unlockPercent(buf, cat, stage) {
+  const bytes = unlockBytes(cat, stage);
+  const set = bytes.reduce((a, o) => a + popcount(buf[o]), 0);
+  return Math.round(100 * set / (bytes.length * 8));
+}
+
+// --------------------------------------------------------------------- cars --
+const CAR_TYPES = ['PEUGOT','FOCUS','COROLLA','240SX','MIATA','CIVIC','PEUGOT106','CORSA','HUMMER','NAVIGATOR','ESCALADE','TIBURON','SENTRA','CELICA','IS300','SUPRA','GOLF','A3','RSX','ECLIPSE','TT','RX8','350Z','G35','3000GT','GTO','MUSTANGGT','SKYLINE','LANCEREVO8','RX7','IMPREZAWRX'];
+
+function bStringHash(s) {
+  let h = 0xFFFFFFFF;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+const CAR_HASHES = new Map(CAR_TYPES.map(n => [bStringHash(n), n]));
+const carName = hash => CAR_HASHES.get(hash >>> 0) ?? null;
+
+/** Career, customized and preset cars stored in the profile (read-only view). */
+function readCars(buf) {
+  const dv = view(buf);
+  const typeAt = o => {
+    const h = dv.getUint32(B + o + 28, true);
+    return { hash: h, name: h ? carName(h) : null };
+  };
+  const career = [];
+  for (let i = 0; i < 5; i++) {
+    const o = 22596 + i * 2034;
+    career.push({ slot: i + 1, ...typeAt(o), owned: buf[B + o + 1073] !== 0 });
+  }
+  const custom = [];
+  for (let i = 0; i < 20; i++) custom.push({ slot: i + 1, ...typeAt(1156 + i * 1072) });
+  const preset = [];
+  for (let i = 0; i < 6; i++) preset.push({ slot: i + 1, ...typeAt(32770 + i * 1076) });
+  return { career, custom, preset };
+}
+
+/** The type hash of a career car (file offset), for an optional future edit. */
+function careerCarHash(buf, slot) { return view(buf).getUint32(B + 22596 + slot * 2034 + 28, true); }
+function writeCareerCarHash(buf, slot, name) {
+  view(buf).setUint32(B + 22596 + slot * 2034 + 28, name ? bStringHash(name) : 0, true);
+}
+
+// -------------------------------------------------------------------- stats --
+function readStats(buf) {
+  const dv = view(buf);
+  const out = [];
+  for (let i = 0; i < 16; i++) {
+    const o = STATS + i * 4;
+    out.push({ offset: o, int: dv.getInt32(o, true), float: dv.getFloat32(o, true) });
+  }
+  return out;
+}
+function writeStat(buf, index, n) {
+  view(buf).setInt32(STATS + index * 4, Math.trunc(n) | 0, true);
+}
+
+// ---------------------------------------------------------------------- raw --
+const RAW_SIZE = { i32: 4, u32: 4, u16: 2, u8: 1, f32: 4 };
+
+function readRaw(buf, o, t) {
+  const dv = view(buf);
+  return { i32: () => dv.getInt32(o, true), u32: () => dv.getUint32(o, true), u16: () => dv.getUint16(o, true), u8: () => dv.getUint8(o), f32: () => dv.getFloat32(o, true) }[t]();
+}
+
+function writeRaw(buf, o, t, v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return false;
+  const dv = view(buf);
+  switch (t) {
+    case 'i32': dv.setInt32(o, Math.trunc(n) | 0, true); break;
+    case 'u32': dv.setUint32(o, Math.trunc(n) >>> 0, true); break;
+    case 'u16': dv.setUint16(o, Math.trunc(n) & 0xffff, true); break;
+    case 'u8': dv.setUint8(o, Math.trunc(n) & 0xff); break;
+    case 'f32': dv.setFloat32(o, n, true); break;
+    default: return false;
+  }
+  return true;
+}
+
+function rawValid(buf, o, t) {
+  return Number.isInteger(o) && o >= 0x24 && o + RAW_SIZE[t] <= buf.length;
+}
+
+const $ = id => document.getElementById(id);
+const drop = $('drop'), fileIn = $('file');
+
+let orig = null, buf = null, fileName = 'profile';
+
+function status(el, msg, cls) { el.textContent = msg; el.className = 'status ' + (cls || ''); }
+
+drop.addEventListener('click', () => fileIn.click());
+drop.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); }
+});
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]);
+});
+fileIn.addEventListener('change', () => fileIn.files[0] && load(fileIn.files[0]));
+
+async function load(file) {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const errors = checkShape(data);
+  if (errors.length) {
+    status($('loadStatus'), errors.join(' '), 'bad');
+    $('editor').hidden = true;
+    return;
+  }
+  const sealed = isSealed(data);
+  orig = data; buf = data.slice(); fileName = file.name || 'profile';
+  status($('loadStatus'),
+    `Loaded ${fileName} (${data.length.toLocaleString()} bytes). ` +
+    (sealed ? 'Checksums are valid.' : 'Checksums are stale (edited elsewhere); they will be made again when you save.'),
+    sealed ? 'ok' : 'warn');
+  $('editor').hidden = false;
+  render();
+}
+
+function render() {
+  if (!buf) return;
+  $('name').value = readName(buf);
+  $('cash').value = readMoney(buf);
+  $('saveMode').value = readSaveMode(buf);
+  $('difficulty').value = readDifficulty(buf);
+
+  renderUnlocks();
+  renderCars();
+  renderStats();
+  showRaw();
+  showChanges();
+}
+
+function renderUnlocks() {
+  const tb = $('unlocks').tBodies[0];
+  tb.innerHTML = '';
+  for (const cat of Object.keys(UNLOCK_RUNS)) {
+    const tr = document.createElement('tr');
+    let allDone = true;
+    const cells = [`<td>${UNLOCK_NAMES[cat]}</td>`];
+    for (let s = 0; s < 5; s++) {
+      const pct = unlockPercent(buf, cat, s);
+      if (pct < 100) allDone = false;
+      cells.push(`<td><button data-cat="${cat}" data-stage="${s}" class="${pct === 100 ? 'done' : ''}" ${pct === 100 ? 'disabled' : ''}>${pct === 100 ? 'Unlocked' : pct + '%'}</button></td>`);
+    }
+    cells.push(`<td><button class="all" data-cat="${cat}" ${allDone ? 'disabled' : ''}>All stages</button></td>`);
+    tr.innerHTML = cells.join('');
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    unlockStage(buf, b.dataset.cat, b.dataset.stage == null ? null : +b.dataset.stage);
+    render();
+  }));
+}
+
+function renderCars() {
+  const c = readCars(buf);
+  const tb = $('cars').tBodies[0];
+  tb.innerHTML = '';
+  const row = (label, slot, type) => {
+    const name = type.name ? type.name : type.hash ? `unknown (0x${type.hash.toString(16)})` : '—';
+    return `<tr><td>${label} ${slot}</td><td class="mono">${name}</td></tr>`;
+  };
+  for (const x of c.career) tb.insertAdjacentHTML('beforeend', row('Career car', x.slot, x));
+  const custom = c.custom.filter(x => x.hash);
+  for (const x of custom) tb.insertAdjacentHTML('beforeend', row('Customized car', x.slot, x));
+  for (const x of c.preset) tb.insertAdjacentHTML('beforeend', row('Preset car', x.slot, x));
+}
+
+function fmtFloat(f) {
+  return Number.isFinite(f) && Math.abs(f) < 1e12 && (f === 0 || Math.abs(f) > 1e-6) ? +f.toPrecision(7) : '—';
+}
+
+function renderStats() {
+  const tb = $('stats').tBodies[0];
+  tb.innerHTML = '';
+  for (const s of readStats(buf)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">0x${s.offset.toString(16).toUpperCase()}</td>
+      <td><input type="number" step="1" data-o="${s.offset}" value="${s.int}"></td>
+      <td class="mono">${fmtFloat(s.float)}</td>`;
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+    writeStat(buf, (inp.dataset.o - 0xD155) / 4, +inp.value);
+    render();
+  }));
+}
+
+function rawOff() {
+  const o = parseInt($('rOff').value.replace(/^0x/i, ''), 16);
+  const t = $('rType').value;
+  if (!rawValid(buf, o, t)) return null;
+  return { o, t };
+}
+
+function showRaw() {
+  const r = rawOff();
+  if (!r) { $('rVal').value = ''; $('hex').textContent = 'Enter a hex offset inside the data area (0x24 or higher).'; return; }
+  const v = readRaw(buf, r.o, r.t);
+  $('rVal').value = r.t === 'f32' ? fmtFloat(v) : v;
+  const start = Math.max(0, (r.o & ~0xf) - 0x10), end = Math.min(buf.length, start + 0x40);
+  const lines = [];
+  for (let a = start; a < end; a += 16) {
+    let hex = '', asc = '';
+    for (let i = 0; i < 16 && a + i < end; i++) {
+      const p = a + i, b = buf[p], hit = p >= r.o && p < r.o + RAW_SIZE[r.t];
+      const h = b.toString(16).padStart(2, '0');
+      hex += hit ? '[' + h + ']' : ' ' + h + ' ';
+      asc += b >= 32 && b < 127 ? String.fromCharCode(b) : '.';
+    }
+    lines.push(a.toString(16).padStart(6, '0').toUpperCase() + '  ' + hex + '  ' + asc);
+  }
+  $('hex').textContent = lines.join('\n');
+}
+
+$('rRead').addEventListener('click', showRaw);
+$('rOff').addEventListener('change', showRaw);
+$('rType').addEventListener('change', showRaw);
+$('rWrite').addEventListener('click', () => {
+  const r = rawOff();
+  if (r && writeRaw(buf, r.o, r.t, $('rVal').value)) render();
+});
+
+$('cash').addEventListener('change', e => {
+  writeMoney(buf, Math.trunc(Number(e.target.value) || 0));
+  render();
+});
+document.querySelectorAll('[data-cash]').forEach(b => b.addEventListener('click', () => {
+  writeMoney(buf, +b.dataset.cash);
+  render();
+}));
+$('saveMode').addEventListener('change', e => { writeSaveMode(buf, e.target.value); render(); });
+$('difficulty').addEventListener('change', e => { writeDifficulty(buf, e.target.value); render(); });
+$('unlockAll').addEventListener('click', () => { unlockAll(buf); render(); });
+$('revert').addEventListener('click', () => { buf = orig.slice(); render(); });
+
+function showChanges() {
+  let n = 0;
+  for (let i = 0; i < buf.length; i++) if (buf[i] !== orig[i]) n++;
+  status($('saveStatus'),
+    n ? `${n.toLocaleString()} byte(s) changed from the loaded file. Saving will reseal the checksums.`
+      : 'No changes yet.',
+    n ? 'warn' : '');
+}
+
+$('save').addEventListener('click', () => {
+  if (!buf) return;
+  seal(buf);
+  const blob = new Blob([buf], { type: 'application/octet-stream' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  status($('saveStatus'),
+    `Downloaded ${fileName} with the checksums made again. Replace the profile file in its folder (back up the original first).`,
+    'ok');
+});
+</script>
+</body>
+</html>

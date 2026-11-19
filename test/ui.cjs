@@ -23,7 +23,7 @@ const check = (name, cond, extra = '') => {
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
-  await page.goto('http://127.0.0.1:8799/', { waitUntil: 'networkidle' });
+  await page.goto(process.env.NFSU2_URL || 'http://127.0.0.1:8799/', { waitUntil: 'networkidle' });
 
   // A truncated file must be refused.
   await page.setInputFiles('#file', shortFile);

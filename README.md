@@ -52,3 +52,9 @@ NODE_PATH=/path/to/playwright/node_modules node test/ui.cjs   # page served on :
 `test/run.mjs` checks both real profiles in
 `~/Downloads/nfsu2-saves-2026-11-18_202337` by default; override with
 `NFSU2_SAVES=<dir>`.
+
+## Single-file build
+
+`node build/single.mjs` writes `NFSU2 Save Editor.html`, a self-contained
+offline copy with the CSS and both modules inlined. Open it directly in a
+browser; no server is needed.
