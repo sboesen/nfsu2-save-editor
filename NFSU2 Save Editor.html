@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#e8630a">
 <title>NFSU2 Save Editor</title>
-<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
+<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, career events, unique parts, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171b22'/%3E%3Ctext x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%23ff7a1f'%3EN%3C/text%3E%3C/svg%3E">
 <style>
 :root {
@@ -78,9 +78,9 @@ footer a { color: var(--accent); }
   <header>
     <h1>NFSU2 <span>Save</span> Editor</h1>
     <p>Open a Need for Speed: Underground 2 profile save (the file named after the profile, such as
-      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, save mode,
-      difficulty and more, then save a copy. The file never leaves your browser. The checksums are made
-      again the way the game writes them.</p>
+      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, career events,
+      save mode, difficulty and more, then save a copy. The file never leaves your browser. The checksums
+      are made again the way the game writes them.</p>
   </header>
 
   <section>
@@ -147,11 +147,79 @@ footer a { color: var(--accent); }
     </section>
 
     <section>
+      <h2>Career</h2>
+      <p class="sub">Decoded from the profile's event list and career block. The event list records the
+        races, cover shoots and unique-part rewards the game has marked as won; ticking one adds it to that
+        list. A tick is the game's won byte (record byte +6), not just a display.</p>
+      <div class="row">
+        <div><label>Current car</label><div id="careerCar" class="mono"></div></div>
+        <div><label>Career stage (from won events)</label><div id="careerStage" class="mono"></div></div>
+        <div><label for="careerStageValue">Career block value (0–6)</label>
+          <select id="careerStageValue">
+            <option value="0">0 (prologue)</option>
+            <option value="1">1 (stage 1)</option>
+            <option value="2">2 (stage 2)</option>
+            <option value="3">3 (stage 3)</option>
+            <option value="4">4 (stage 4 / 5?)</option>
+            <option value="5">5 (career done)</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+      </div>
+      <div id="careerUnique" class="sub"></div>
+      <div class="quick">
+        <button class="primary" id="markAllWon">Mark every race and showcase won</button>
+        <button id="markUnique">Mark unique parts won</button>
+        <button id="markCareerComplete">Finish career (all won, block value 5)</button>
+      </div>
+      <div id="careerSummary" class="sub"></div>
+      <div class="scroll" style="max-height: 420px; overflow-y: auto">
+        <table id="events"><thead><tr><th>Stage</th><th>Type</th><th>Event</th><th>Won</th></tr></thead><tbody></tbody></table>
+      </div>
+      <details>
+        <summary>Career block (19 records of 20 bytes)</summary>
+        <div class="scroll">
+          <table id="careerBlock"><thead><tr><th>Record</th><th>+0</th><th>+4</th><th>+8</th><th>+12</th><th>+16</th></tr></thead><tbody></tbody></table>
+        </div>
+        <p class="sub">The first record is a header: +4 is the current car handle (CAREER_SLOT_n), +8 an
+          unknown handle, +12 is 4 in these saves, +16 flags. The rest look like race results/times; their
+          exact meaning is not mapped yet.</p>
+      </details>
+    </section>
+
+    <section>
       <h2>Cars in this profile</h2>
       <p class="sub">Read-only view of the career, customized and preset cars stored in the save. Type names
-        come from the game's own car table; a hash that is not one of them is a mod car.</p>
+        come from the game's car table and the modded game's car folders; a name marked “(mod)” is a car the
+        stock game does not have.</p>
       <div class="scroll">
         <table id="cars"><thead><tr><th>Slot</th><th>Type</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Garage (GARAGE.DAT)</h2>
+      <p class="sub">Optional: drop the profile's <span class="mono">GARAGE.DAT</span> to see and edit the
+        bonus/garage cars. The file is saved beside the profile; it holds the cars in slots 6–10 (and more in
+        the modded game). The profile editor works without it.</p>
+      <div class="drop" id="garageDrop" tabindex="0" role="button" aria-label="Choose GARAGE.DAT">
+        <strong>Drop GARAGE.DAT here, or click to choose it</strong>
+        Optional; the profile editor works without it
+      </div>
+      <input type="file" id="garageFile" hidden>
+      <div class="status" id="garageStatus"></div>
+      <div id="garageEditor" hidden style="display:grid;gap:12px">
+        <div id="garageHead" class="sub"></div>
+        <div class="scroll">
+          <table id="garage"><thead><tr><th>Slot</th><th>Car</th><th>Owned</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="quick">
+          <button class="primary" id="garageSave">Save edited GARAGE.DAT</button>
+          <button id="garageRevert">Revert garage changes</button>
+        </div>
+        <div class="status" id="garageSaveStatus"></div>
+        <p class="sub">GARAGE.DAT has no checksum; the header fingerprint is left as it is. Replace the file
+          in the profile's folder after downloading.</p>
       </div>
     </section>
 
@@ -194,7 +262,8 @@ footer a { color: var(--accent); }
     <p>Format and checksums from <a href="https://github.com/th0mk/nfsu2-web" target="_blank" rel="noopener">th0mk/nfsu2-web</a>
       (MIT), based on <a href="https://github.com/TalhaMudo/NFSU2Recomp" target="_blank" rel="noopener">NFSU2Recomp</a>
       and the clean-room <a href="https://github.com/whoismept/OpenUG2" target="_blank" rel="noopener">OpenUG2</a> spec.
-      Unlock runs from NFSU2 Profile Creator 1.1. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
+      Unlock runs from NFSU2 Profile Creator 1.1; race names from GLOBAL/GLOBALB.BUN; mod car names from the
+      modded game's CARS folder. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
   </footer>
 </main>
 <script type="module">
@@ -210,10 +279,28 @@ footer a { color: var(--accent); }
 //   1156   20 custom cars, 1072 bytes each (type hash at +28)
 //   22596  5 career cars, 2034 bytes each (type hash at +28, owned at +1073)
 //   32770  6 preset cars, 1076 bytes each (type hash at +28)
+//   39230  stage 0 race hashes (3)
+//   39487  stage 1 race hashes (5)
+//   39744  stage 2 race hashes (18)
+//   40001  stage 3 race hashes
+//   40258  stage 4 race hashes
+//   40515  stage 5 race hashes
+//   41301  u32 event-list count; 41305 event list (8-byte records:
+//          +0 race/showcase hash, +4 flags, +6 = 1 when won)
+//   50599  career block: 19 records of 20 bytes.  The first is a header
+//          (+4 a CAREER_SLOT_n handle, +8 an unknown handle, +12 a value
+//          that is 4 in these saves, +16 flags); the rest hold race
+//          results/times.  The CAREER_SLOT_n handle names the car the
+//          career drives.
 //   50979  u32 difficulty (0 easy, 1 medium, 2 hard)
 //   50987  u8 autosave, 50988 u8 save prompt
 //   53761  name, 32 bytes NUL-padded
 // and the bank at file 0xA16A (payload 41286).
+//
+// GARAGE.DAT beside the profile: 32-byte head ("N2GA", version, a
+// fingerprint, the drive/quick-race/stand-in handles), then 20 records
+// of 2034 bytes in the modded game (5 in nfsu2-web's own format), the
+// same career-car records as the profile's 5.
 //
 // The checksum is CRC-32/BZIP2 over D[0..n-5] XOR the big-endian u32 in
 // D[n-4..n-1]; stored little-endian.
@@ -229,6 +316,24 @@ const STATS = 0xD155;         // 16 unmapped i32 values
 const AUTOSAVE = B + 50987;
 const PROMPT = B + 50988;
 const DIFFICULTY = B + 50979;
+
+const CAREER = 50599;
+const CAREER_CURRENT_CAR = CAREER + 4;
+const CAREER_UNKNOWN_HANDLE = CAREER + 8;
+const CAREER_STAGE_VALUE = CAREER + 12;
+const CAREER_REC_SIZE = 20;
+const CAREER_RECORDS = 19;
+
+const EVENTS_COUNT = 41301;
+const EVENTS = 41305;
+const EVENTS_MAX = 384;
+
+const GARAGE_MAGIC = 0x4147324E; // "N2GA"
+const GARAGE_HEAD = 32;
+const GARAGE_REC = 2034;
+const GARAGE_MAX = 20;
+
+const CAREER_SLOT_BASE = 0x319A8CA1; // CAREER_SLOT_0
 
 const CRC_T = (() => {
   const t = new Uint32Array(256);
@@ -375,23 +480,79 @@ function unlockPercent(buf, cat, stage) {
 }
 
 // --------------------------------------------------------------------- cars --
-const CAR_TYPES = ['PEUGOT','FOCUS','COROLLA','240SX','MIATA','CIVIC','PEUGOT106','CORSA','HUMMER','NAVIGATOR','ESCALADE','TIBURON','SENTRA','CELICA','IS300','SUPRA','GOLF','A3','RSX','ECLIPSE','TT','RX8','350Z','G35','3000GT','GTO','MUSTANGGT','SKYLINE','LANCEREVO8','RX7','IMPREZAWRX'];
-
 function bStringHash(s) {
   let h = 0xFFFFFFFF;
   for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) >>> 0;
   return h;
 }
 
+const STOCK_PLAYER = ['PEUGOT','FOCUS','COROLLA','240SX','MIATA','CIVIC','PEUGOT106','CORSA','HUMMER','NAVIGATOR','ESCALADE','TIBURON','SENTRA','CELICA','IS300','SUPRA','GOLF','A3','RSX','ECLIPSE','TT','RX8','350Z','G35','3000GT','GTO','MUSTANGGT','SKYLINE','LANCEREVO8','RX7','IMPREZAWRX'];
+const STOCK_TRAFFIC = ['TAXI','4DR_SEDAN02','AMBULANCE','TAXI02','PANELVAN','COUPE','FIRETRUCK','PARCELVAN','PICKUP','4DR_SEDAN','BUS','SUV','MINIVAN','HATCHBACK','HATCHBACK02'];
+const MOD_CAR_TYPES = `200SXS14A
+300ZX
+959
+996
+ACCORD
+BB6
+BMW850
+BOXSTER986
+CELICAT205
+CHARGER
+CIVICEG
+CIVICEK9
+COBRA
+CORVETTEC5
+CRXDS
+CRXSIR
+E36
+ECLIPSE03
+ELISE
+ESCORT
+EVO9IX
+FAIRZ
+FTOGPR
+G55
+GS300
+GT86ZN
+GTI3
+IF
+IMPALA
+IMPREZA
+INFIFX45
+INTEGRA
+LANCER
+LANCEREVO4
+LEONCP
+LFA
+M3GTR
+MERC560SE
+MR2AW1
+MRS
+NEON
+NEONC
+NSX
+NSX91
+R33
+S2000
+SAVANNA
+SC300Z30
+SILVIA
+SUPRAGA70
+VIPER`.split('\n');
+
+const CAR_TYPES = [...STOCK_PLAYER, ...STOCK_TRAFFIC, ...MOD_CAR_TYPES];
+const STOCK_GAME_HASHES = new Set([...STOCK_PLAYER, ...STOCK_TRAFFIC].map(bStringHash));
 const CAR_HASHES = new Map(CAR_TYPES.map(n => [bStringHash(n), n]));
 const carName = hash => CAR_HASHES.get(hash >>> 0) ?? null;
+const isStockCar = hash => STOCK_GAME_HASHES.has(hash >>> 0);
+const isModCar = name => !STOCK_GAME_HASHES.has(bStringHash(name));
 
 /** Career, customized and preset cars stored in the profile (read-only view). */
 function readCars(buf) {
   const dv = view(buf);
   const typeAt = o => {
     const h = dv.getUint32(B + o + 28, true);
-    return { hash: h, name: h ? carName(h) : null };
+    return { hash: h, name: h ? carName(h) : null, stock: h ? isStockCar(h) : false };
   };
   const career = [];
   for (let i = 0; i < 5; i++) {
@@ -410,6 +571,530 @@ function careerCarHash(buf, slot) { return view(buf).getUint32(B + 22596 + slot 
 function writeCareerCarHash(buf, slot, name) {
   view(buf).setUint32(B + 22596 + slot * 2034 + 28, name ? bStringHash(name) : 0, true);
 }
+
+// --------------------------------------------------------------------- races --
+// Race and showcase names from GLOBAL/GLOBALB.BUN's string pool; the game's
+// event hashes are bStringHash() of these names.
+const RACE_NAMES = `DDAY_EVENT_A
+DDAY_EVENT_B
+S2_CIRCUIT_2
+S2_CIRCUIT_3
+S2_CIRCUIT_4
+S2_CIRCUIT_5
+S2_DRAG_2
+S2_DRIFT_2
+S2_DRIFT_3
+S2_DRIFT_4
+S2_H_CIRCUIT_6
+S2_H_DRAG_3
+S2_H_SPRINT_5
+S2_H_STREET_5
+S2_SPON_CIRCUIT_1
+S2_SPON_CIRCUIT_2
+S2_SPON_CIRCUIT_3
+S2_SPON_DRAG_1
+S2_SPON_DRAG_2
+S2_SPON_DRAG_3
+S2_SPON_DRIFT_1
+S2_SPON_DRIFT_2
+S2_SPON_DRIFT_3
+S2_SPON_SPRINT_1
+S2_SPON_STREET_1
+S2_SPRINT_2
+S2_SPRINT_3
+S2_SPRINT_4
+S2_STREET_2
+S2_STREET_3
+S2_STREET_4
+S2_SUV_1
+S2_SUV_2
+S2_SUV_3
+S2_URL_1
+S2_URL_2
+S2_URL_3
+S3_CIRCUIT_10
+S3_CIRCUIT_11
+S3_CIRCUIT_12
+S3_CIRCUIT_7
+S3_CIRCUIT_8
+S3_CIRCUIT_9
+S3_DRAG_4
+S3_DRAG_5
+S3_DRAG_7
+S3_DRIFT_10
+S3_DRIFT_5
+S3_DRIFT_6
+S3_DRIFT_7
+S3_DRIFT_9
+S3_H_CIRCUIT_13
+S3_H_DRAG_6
+S3_H_DRAG_8
+S3_H_DRIFT_11
+S3_H_DRIFT_8
+S3_H_SPRINT_10
+S3_H_STREET_10
+S3_H_STREET_7
+S3_SPON_CIRCUIT_4
+S3_SPON_DRAG_4
+S3_SPON_DRAG_5
+S3_SPON_DRAG_6
+S3_SPON_DRIFT_4
+S3_SPON_DRIFT_5
+S3_SPON_DRIFT_6
+S3_SPON_SPRINT_4
+S3_SPON_STREET_1
+S3_SPON_STREET_2
+S3_SPON_STREET_3
+S3_SPRINT_6
+S3_SPRINT_7
+S3_SPRINT_8
+S3_SPRINT_9
+S3_STREET_6
+S3_STREET_8
+S3_STREET_9
+S3_SUV_1
+S3_SUV_2
+S3_SUV_3
+S3_URL_4
+S3_URL_5
+S3_URL_6
+S3_URL_7
+S3_URL_8
+S4_CIRCUIT_15
+S4_CIRCUIT_16
+S4_CIRCUIT_17
+S4_CIRCUIT_18
+S4_CIRCUIT_19
+S4_CIRCUIT_20
+S4_CIRCUIT_21
+S4_CIRCUIT_22
+S4_DRAG_10
+S4_DRAG_11
+S4_DRAG_12
+S4_DRAG_13
+S4_DRAG_14
+S4_DRAG_16
+S4_DRAG_9
+S4_DRIFT_12
+S4_DRIFT_14
+S4_DRIFT_15
+S4_DRIFT_16
+S4_H_CIRCUIT_14
+S4_H_CIRCUIT_23
+S4_H_DRAG_15
+S4_H_DRAG_17
+S4_H_DRIFT_13
+S4_H_DRIFT_17
+S4_H_SPRINT_13
+S4_H_SPRINT_19
+S4_H_STREET_13
+S4_H_STREET_17
+S4_SPON_CIRCUIT_5
+S4_SPON_CIRCUIT_6
+S4_SPON_CIRCUIT_7
+S4_SPON_DRAG_7
+S4_SPON_DRAG_8
+S4_SPON_DRAG_9
+S4_SPON_DRIFT_7
+S4_SPON_SPRINT_5
+S4_SPON_STREET_5
+S4_SPON_STREET_6
+S4_SPON_STREET_7
+S4_SPRINT_11
+S4_SPRINT_12
+S4_SPRINT_14
+S4_SPRINT_15
+S4_SPRINT_16
+S4_SPRINT_17
+S4_SPRINT_18
+S4_STREET_11
+S4_STREET_12
+S4_STREET_14
+S4_STREET_15
+S4_STREET_16
+S4_SUV_1
+S4_SUV_2
+S4_SUV_3
+S4_URL_1
+S4_URL_2
+S4_URL_3
+S4_URL_4
+S4_URL_5
+S4_URL_6
+S4_URL_7
+S5_CIRCUIT_24
+S5_CIRCUIT_25
+S5_CIRCUIT_26
+S5_CIRCUIT_27
+S5_CIRCUIT_28
+S5_CIRCUIT_29
+S5_CIRCUIT_30
+S5_CIRCUIT_31
+S5_CIRCUIT_33
+S5_CIRCUIT_34
+S5_CIRCUIT_36
+S5_DRAG_18
+S5_DRAG_19
+S5_DRAG_20
+S5_DRAG_22
+S5_DRAG_23
+S5_DRIFT_18
+S5_DRIFT_19
+S5_DRIFT_21
+S5_DRIFT_22
+S5_DRIFT_23
+S5_H_CIRCUIT_32
+S5_H_CIRCUIT_35
+S5_H_DRAG_21
+S5_H_DRAG_24
+S5_H_DRIFT_20
+S5_H_DRIFT_24
+S5_H_SPRINT_20
+S5_H_SPRINT_28
+S5_H_STREET_20
+S5_H_STREET_26
+S5_SPON_CIRCUIT_10
+S5_SPON_CIRCUIT_8
+S5_SPON_CIRCUIT_9
+S5_SPON_DRAG_10
+S5_SPON_DRIFT_10
+S5_SPON_DRIFT_8
+S5_SPON_DRIFT_9
+S5_SPON_SPRINT_6
+S5_SPON_STREET_10
+S5_SPON_STREET_8
+S5_SPON_STREET_9
+S5_SPRINT_21
+S5_SPRINT_22
+S5_SPRINT_23
+S5_SPRINT_24
+S5_SPRINT_25
+S5_SPRINT_26
+S5_SPRINT_27
+S5_STREET_18
+S5_STREET_19
+S5_STREET_21
+S5_STREET_22
+S5_STREET_23
+S5_STREET_24
+S5_STREET_25
+S5_SUV_1
+S5_SUV_2
+S5_SUV_3
+S5_SUV_4
+S5_URL_1
+S5_URL_2
+S5_URL_3
+S5_URL_4
+S5_URL_5
+S5_URL_6
+S5_URL_7
+S5_URL_8
+S5_URL_9
+STAGE_0_CIRCUIT_0
+STAGE_0_CIRCUIT_1
+STAGE_0_SPRINT_0
+STAGE_1_CIRCUIT_1
+STAGE_1_DRAG_1
+STAGE_1_DRIFT_1
+STAGE_1_SHORT_1
+STAGE_1_SPRINT_1
+STAGE_2_DVD_1
+STAGE_2_SHOW_1
+STAGE_2_SHOW_1_PICTURE
+STAGE_2_SHOW_2
+STAGE_2_SHOW_2_PICTURE
+STAGE_2_VISUAL_1
+STAGE_3_DVD_1
+STAGE_3_DVD_2
+STAGE_3_PERF_1
+STAGE_3_SHOW_1
+STAGE_3_SHOW_1_PICTURE
+STAGE_3_SHOW_2
+STAGE_3_SHOW_2_PICTURE
+STAGE_3_SHOW_3
+STAGE_3_SHOW_3_PICTURE
+STAGE_3_SHOW_4
+STAGE_3_SHOW_4_PICTURE
+STAGE_3_VISUAL_2
+STAGE_4_DVD_1
+STAGE_4_DVD_2
+STAGE_4_DVD_3
+STAGE_4_PERF_2
+STAGE_4_SHOW_1
+STAGE_4_SHOW_1_PICTURE
+STAGE_4_SHOW_2
+STAGE_4_SHOW_2_PICTURE
+STAGE_4_SHOW_3
+STAGE_4_SHOW_3_PICTURE
+STAGE_4_SHOW_4
+STAGE_4_SHOW_4_PICTURE
+STAGE_4_SHOW_5
+STAGE_4_SHOW_5_PICTURE
+STAGE_4_SHOW_6
+STAGE_4_SHOW_6_PICTURE
+STAGE_4_VISUAL_3
+STAGE_4_VISUAL_4
+STAGE_5_DVD_1
+STAGE_5_DVD_2
+STAGE_5_DVD_3
+STAGE_5_DVD_4
+STAGE_5_PERF_3
+STAGE_5_SHOW_1
+STAGE_5_SHOW_1_PICTURE
+STAGE_5_SHOW_2
+STAGE_5_SHOW_2_PICTURE
+STAGE_5_SHOW_3
+STAGE_5_SHOW_3_PICTURE
+STAGE_5_SHOW_4
+STAGE_5_SHOW_4_PICTURE
+STAGE_5_SHOW_5
+STAGE_5_SHOW_5_PICTURE
+STAGE_5_SHOW_6
+STAGE_5_SHOW_6_PICTURE
+STAGE_5_SHOW_7
+STAGE_5_SHOW_7_PICTURE
+STAGE_5_SHOW_8
+STAGE_5_SHOW_8_PICTURE
+STAGE_5_VISUAL_5`.split('\n');
+
+const RACE_HASHES = new Map(RACE_NAMES.map(n => [bStringHash(n), n]));
+const raceName = hash => RACE_HASHES.get(hash >>> 0) ?? null;
+const RACE_LIST = RACE_NAMES;
+
+/** Stage, type and kind of a race/showcase name, for display. */
+function raceInfo(name) {
+  if (!name) return null;
+  if (name.startsWith('DDAY_'))
+    return { stage: null, type: 'D-Day event', kind: 'special', hidden: false, sponsor: false, showcase: false };
+  let m = name.match(/^STAGE_(\d)_(.+)$/);
+  if (m) {
+    const stage = +m[1], rest = m[2];
+    if (rest.startsWith('DVD')) return { stage, type: 'DVD cover shoot', kind: 'showcase', hidden: false, sponsor: false, showcase: true };
+    if (rest.startsWith('SHOW')) return { stage, type: 'Cover shoot', kind: 'showcase', hidden: false, sponsor: false, showcase: true };
+    if (rest.startsWith('VISUAL')) return { stage, type: 'Unique visual part', kind: 'other', hidden: false, sponsor: false, showcase: false };
+    if (rest.startsWith('PERF')) return { stage, type: 'Unique performance part', kind: 'other', hidden: false, sponsor: false, showcase: false };
+    return { stage, type: rest.replace(/_\d+$/, '').replace(/_/g, ' ').toLowerCase(), kind: 'race', hidden: false, sponsor: false, showcase: false };
+  }
+  m = name.match(/^S(\d)_(.+)$/);
+  if (m) {
+    const stage = +m[1];
+    let rest = m[2], hidden = false, sponsor = false;
+    if (rest.startsWith('H_')) { hidden = true; rest = rest.slice(2); }
+    if (rest.startsWith('SPON_')) { sponsor = true; rest = rest.slice(5); }
+    return { stage, type: rest.replace(/_\d+$/, '').replace(/_/g, ' ').toLowerCase(), kind: 'race', hidden, sponsor, showcase: false };
+  }
+  return { stage: null, type: 'unknown', kind: 'unknown', hidden: false, sponsor: false, showcase: false };
+}
+
+// ------------------------------------------------------------------- career --
+function handleSlot(handle) {
+  const n = (handle >>> 0) - CAREER_SLOT_BASE;
+  return n >= 0 && n <= 9 ? n : null;
+}
+
+function careerCarName(buf, slot) {
+  if (slot == null || slot >= 5) return null;
+  const h = view(buf).getUint32(B + 22596 + slot * 2034 + 28, true);
+  return h ? carName(h) : null;
+}
+
+function readCareer(buf) {
+  const dv = view(buf);
+  const currentHandle = dv.getUint32(B + CAREER_CURRENT_CAR, true);
+  const slot = handleSlot(currentHandle);
+  const records = [];
+  for (let i = 0; i < CAREER_RECORDS; i++) {
+    const o = B + CAREER + i * CAREER_REC_SIZE;
+    records.push({
+      index: i,
+      words: [0, 4, 8, 12, 16].map(k => dv.getUint32(o + k, true)),
+    });
+  }
+  return {
+    currentHandle,
+    currentSlot: slot,
+    currentCar: careerCarName(buf, slot),
+    unknownHandle: dv.getUint32(B + CAREER_UNKNOWN_HANDLE, true),
+    stageValue: dv.getUint32(B + CAREER_STAGE_VALUE, true),
+    records,
+  };
+}
+
+function writeCareerStage(buf, value) {
+  view(buf).setUint32(B + CAREER_STAGE_VALUE, Math.max(0, Math.min(0xFFFFFFFF, Math.trunc(value))) >>> 0, true);
+}
+
+// ------------------------------------------------------------------- events --
+function readEvents(buf) {
+  const dv = view(buf);
+  const count = Math.min(dv.getUint32(B + EVENTS_COUNT, true), EVENTS_MAX);
+  const records = [];
+  for (let i = 0; i < count; i++) {
+    const o = B + EVENTS + i * 8;
+    const hash = dv.getUint32(o, true);
+    const flags = dv.getUint32(o + 4, true);
+    const won = buf[o + 6] === 1;
+    const name = raceName(hash);
+    records.push({ index: i, offset: o, hash, flags, won, name, info: name ? raceInfo(name) : null });
+  }
+  return { count, records };
+}
+
+function eventIndex(buf, hash) {
+  const dv = view(buf);
+  const count = Math.min(dv.getUint32(B + EVENTS_COUNT, true), EVENTS_MAX);
+  for (let i = 0; i < count; i++) {
+    const o = B + EVENTS + i * 8;
+    if (dv.getUint32(o, true) === (hash >>> 0)) return i;
+  }
+  return -1;
+}
+
+function isEventWon(buf, hash) {
+  const i = eventIndex(buf, hash);
+  return i >= 0 && buf[B + EVENTS + i * 8 + 6] === 1;
+}
+
+function setEventWon(buf, hash, won) {
+  const dv = view(buf);
+  let i = eventIndex(buf, hash);
+  if (i < 0) {
+    if (!won) return false;
+    const count = Math.min(dv.getUint32(B + EVENTS_COUNT, true), EVENTS_MAX);
+    if (count >= EVENTS_MAX) return false;
+    i = count;
+    dv.setUint32(B + EVENTS_COUNT, count + 1, true);
+    const o = B + EVENTS + i * 8;
+    dv.setUint32(o, hash >>> 0, true);
+    dv.setUint32(o + 4, 0x00010001, true); // byte +6 = 1 (won)
+  }
+  const o = B + EVENTS + i * 8;
+  buf[o + 6] = won ? 1 : 0;
+  return true;
+}
+
+/** Set every existing event to won, then add any known race/showcase that is not in the list. */
+function markAllEventsWon(buf) {
+  let changed = 0, added = 0;
+  for (const r of readEvents(buf).records) {
+    if (!r.won) { buf[B + EVENTS + r.index * 8 + 6] = 1; changed++; }
+  }
+  for (const name of RACE_NAMES) {
+    const h = bStringHash(name);
+    if (eventIndex(buf, h) < 0) {
+      if (setEventWon(buf, h, true)) added++;
+      else break;
+    }
+  }
+  return { changed, added };
+}
+
+function markUniquePartsWon(buf) {
+  let changed = 0;
+  for (const name of ['S5_URL_9', 'S5_CIRCUIT_36', 'STAGE_5_VISUAL_5', 'STAGE_5_PERF_3']) {
+    const h = bStringHash(name);
+    if (!isEventWon(buf, h) && setEventWon(buf, h, true)) changed++;
+  }
+  return changed;
+}
+
+/** Every known event won, plus the career block's stage value set to 5 (career done). */
+function markCareerComplete(buf) {
+  const all = markAllEventsWon(buf);
+  writeCareerStage(buf, 5);
+  return all;
+}
+
+function uniquePartsStatus(buf) {
+  const caleb = isEventWon(buf, bStringHash('S5_URL_9')) || isEventWon(buf, bStringHash('S5_CIRCUIT_36'));
+  return {
+    // runtime/uniques.c: once Caleb is beaten the unique visual parts are in
+    // every car's shops; the stage 5 visual star is the outrun reward itself.
+    caleb,
+    visual: caleb,
+    visualStar: isEventWon(buf, bStringHash('STAGE_5_VISUAL_5')),
+    perf: isEventWon(buf, bStringHash('STAGE_5_PERF_3')),
+  };
+}
+
+/** The highest stage with a won event, or null. */
+function careerStageGuess(buf) {
+  let max = -1;
+  for (const r of readEvents(buf).records) {
+    if (!r.won || !r.info || r.info.stage == null) continue;
+    if (r.info.stage > max) max = r.info.stage;
+  }
+  return max < 0 ? null : Math.min(max, 5);
+}
+
+// -------------------------------------------------------------------- garage --
+function checkGarage(buf) {
+  const errors = [];
+  if (buf.length < GARAGE_HEAD) { errors.push('Not a GARAGE.DAT: too short.'); return errors; }
+  const dv = view(buf);
+  if (dv.getUint32(0, true) !== GARAGE_MAGIC) errors.push('Not a GARAGE.DAT: no "N2GA" header.');
+  if ((buf.length - GARAGE_HEAD) % GARAGE_REC !== 0) errors.push('Unexpected GARAGE.DAT size.');
+  const n = Math.floor((buf.length - GARAGE_HEAD) / GARAGE_REC);
+  if (n < 1 || n > GARAGE_MAX) errors.push(`Unexpected number of garage slots (${n}).`);
+  return errors;
+}
+
+function readGarage(buf) {
+  const dv = view(buf);
+  const n = Math.floor((buf.length - GARAGE_HEAD) / GARAGE_REC);
+  const header = {
+    magic: dv.getUint32(0, true),
+    version: dv.getUint32(4, true),
+    fpLo: dv.getUint32(8, true),
+    fpHi: dv.getUint32(12, true),
+    drive: dv.getUint32(16, true),
+    qr: dv.getUint32(20, true),
+    stand: dv.getUint32(24, true),
+    extra: dv.getUint32(28, true),
+  };
+  const records = [];
+  for (let i = 0; i < n; i++) {
+    const o = GARAGE_HEAD + i * GARAGE_REC;
+    const h = dv.getUint32(o + 28, true);
+    records.push({
+      slot: i,
+      handle: dv.getUint32(o + 4, true),
+      hash: h,
+      name: h ? carName(h) : null,
+      stock: h ? isStockCar(h) : false,
+      owned: buf[o + 1073] !== 0,
+    });
+  }
+  return { header, records };
+}
+
+/** Resolve a GARAGE.DAT header handle to a garage record or a profile career car. */
+function garageHandleInfo(g, handle, profile) {
+  if (!handle) return null;
+  const rec = g.records.find(r => r.handle === (handle >>> 0));
+  if (rec) return { kind: 'garage', slot: rec.slot, name: rec.name };
+  const s = handleSlot(handle);
+  if (s != null && s < 5)
+    return { kind: 'profile', slot: s, name: profile && profile.length === FILE_SIZE ? careerCarName(profile, s) : null };
+  return { kind: 'unknown', slot: null, name: null };
+}
+
+function writeGarageCar(buf, slot, name) {
+  const o = GARAGE_HEAD + slot * GARAGE_REC + 28;
+  if (slot < 0 || o + 4 > buf.length) return false;
+  view(buf).setUint32(o, name ? bStringHash(name) : 0, true);
+  return true;
+}
+
+function writeGarageOwned(buf, slot, owned) {
+  const o = GARAGE_HEAD + slot * GARAGE_REC + 1073;
+  if (slot < 0 || o >= buf.length) return false;
+  buf[o] = owned ? 1 : 0;
+  return true;
+}
+
+function garageValid(buf) { return checkGarage(buf).length === 0; }
 
 // -------------------------------------------------------------------- stats --
 function readStats(buf) {
@@ -456,6 +1141,7 @@ const $ = id => document.getElementById(id);
 const drop = $('drop'), fileIn = $('file');
 
 let orig = null, buf = null, fileName = 'profile';
+let gOrig = null, gBuf = null, gFileName = 'GARAGE.DAT';
 
 function status(el, msg, cls) { el.textContent = msg; el.className = 'status ' + (cls || ''); }
 
@@ -482,12 +1168,14 @@ async function load(file) {
   }
   const sealed = isSealed(data);
   orig = data; buf = data.slice(); fileName = file.name || 'profile';
+  resetGarage();
   status($('loadStatus'),
     `Loaded ${fileName} (${data.length.toLocaleString()} bytes). ` +
     (sealed ? 'Checksums are valid.' : 'Checksums are stale (edited elsewhere); they will be made again when you save.'),
     sealed ? 'ok' : 'warn');
   $('editor').hidden = false;
   render();
+  renderCareer();
 }
 
 function render() {
@@ -531,7 +1219,7 @@ function renderCars() {
   const tb = $('cars').tBodies[0];
   tb.innerHTML = '';
   const row = (label, slot, type) => {
-    const name = type.name ? type.name : type.hash ? `unknown (0x${type.hash.toString(16)})` : '—';
+    const name = type.name ? type.name + (type.stock ? '' : ' (mod)') : type.hash ? `unknown (0x${type.hash.toString(16)})` : '—';
     return `<tr><td>${label} ${slot}</td><td class="mono">${name}</td></tr>`;
   };
   for (const x of c.career) tb.insertAdjacentHTML('beforeend', row('Career car', x.slot, x));
@@ -563,6 +1251,226 @@ function renderStats() {
   }));
 }
 
+// ------------------------------------------------------------------- career --
+function renderCareer() {
+  if (!buf) return;
+  const c = readCareer(buf);
+  const u = uniquePartsStatus(buf);
+  const stage = careerStageGuess(buf);
+  $('careerCar').textContent = c.currentSlot == null
+    ? `unknown (handle 0x${c.currentHandle.toString(16)})`
+    : c.currentSlot < 5
+      ? `${c.currentCar || 'empty'} (career slot ${c.currentSlot + 1})`
+      : `slot ${c.currentSlot + 1} (car is in GARAGE.DAT)`;
+  $('careerStage').textContent = (stage == null ? 'no won events' : `stage ${stage === 5 ? '5+' : stage}`) + `; block value ${c.stageValue}`;
+  $('careerStageValue').value = String(c.stageValue);
+  $('careerUnique').innerHTML =
+    `Unique visual parts (widebody etc.): <span class="${u.visual ? 'ok' : 'warn'}">${u.visual ? 'unlocked (Caleb beaten)' : 'locked'}</span><br>` +
+    `Stage 5 visual star: <span class="${u.visualStar ? 'ok' : 'warn'}">${u.visualStar ? 'won' : 'not won'}</span><br>` +
+    `Unique performance parts: <span class="${u.perf ? 'ok' : 'warn'}">${u.perf ? 'unlocked' : 'locked'}</span><br>` +
+    `Caleb / final event: <span class="${u.caleb ? 'ok' : 'warn'}">${u.caleb ? 'beaten' : 'not yet'}</span>`;
+  renderEvents();
+  renderCareerSummary();
+  renderCareerBlock(c);
+}
+
+function eventRow(name, hash, info, won) {
+  const stage = info.stage == null ? 'Special' : (info.stage === 0 ? 'Prologue' : `Stage ${info.stage}`);
+  const type = info.type + (info.hidden ? ' (hidden)' : '') + (info.sponsor ? ' (sponsor)' : '') + (info.showcase ? ' (showcase)' : '');
+  return `<tr><td>${stage}</td><td>${type}</td><td class="mono">${name}</td><td><input type="checkbox" data-hash="${hash}" ${won ? 'checked' : ''}></td></tr>`;
+}
+
+function renderEvents() {
+  const ev = readEvents(buf);
+  const items = RACE_LIST.map(name => {
+    const h = bStringHash(name);
+    return { name, hash: h, info: raceInfo(name), won: isEventWon(buf, h) };
+  });
+  items.sort((a, b) => {
+    const sa = a.info.stage == null ? -1 : a.info.stage;
+    const sb = b.info.stage == null ? -1 : b.info.stage;
+    if (sa !== sb) return sa - sb;
+    if (a.info.kind !== b.info.kind) return a.info.kind.localeCompare(b.info.kind);
+    return a.name.localeCompare(b.name);
+  });
+  const rows = items.map(x => eventRow(x.name, x.hash, x.info, x.won));
+  for (const r of ev.records) {
+    if (r.name) continue;
+    rows.push(eventRow(`Unknown (0x${r.hash.toString(16)})`, r.hash, { stage: null, type: 'unknown', hidden: false, sponsor: false, showcase: false }, r.won));
+  }
+  const tb = $('events').tBodies[0];
+  tb.innerHTML = rows.join('');
+  tb.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    const ok = setEventWon(buf, +cb.dataset.hash, cb.checked);
+    if (!ok) cb.checked = !cb.checked;
+    renderCareerSummary();
+    showChanges();
+  }));
+}
+
+function renderCareerSummary() {
+  const ev = readEvents(buf);
+  const won = new Set(ev.records.filter(r => r.won && r.name).map(r => r.name));
+  const stages = new Map();
+  for (const name of RACE_LIST) {
+    const info = raceInfo(name);
+    const key = info.stage == null ? 'Special' : info.stage;
+    const b = stages.get(key) || { races: 0, racesWon: 0, shows: 0, showsWon: 0, other: 0, otherWon: 0 };
+    if (info.kind === 'race') { b.races++; if (won.has(name)) b.racesWon++; }
+    else if (info.kind === 'showcase') { b.shows++; if (won.has(name)) b.showsWon++; }
+    else { b.other++; if (won.has(name)) b.otherWon++; }
+    stages.set(key, b);
+  }
+  const lines = [];
+  const keys = [...stages.keys()].sort((a, b) => (a === 'Special' ? -1 : a) - (b === 'Special' ? -1 : b));
+  for (const key of keys) {
+    const b = stages.get(key);
+    const label = key === 'Special' ? 'Special' : (key === 0 ? 'Prologue' : `Stage ${key}`);
+    const parts = [];
+    if (b.races) parts.push(`races ${b.racesWon}/${b.races}`);
+    if (b.shows) parts.push(`shows ${b.showsWon}/${b.shows}`);
+    if (b.other) parts.push(`other ${b.otherWon}/${b.other}`);
+    lines.push(`${label}: ${parts.join(', ')}`);
+  }
+  const unknown = ev.records.filter(r => !r.name);
+  if (unknown.length) lines.push(`Other records in the list: ${unknown.length}`);
+  $('careerSummary').textContent = lines.join(' · ');
+}
+
+function renderCareerBlock(c) {
+  const tb = $('careerBlock').tBodies[0];
+  tb.innerHTML = '';
+  const hex = w => '0x' + w.toString(16).padStart(8, '0').toUpperCase();
+  c.records.forEach((r, i) => {
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${i === 0 ? 'Header' : `Record ${i}`}</td>${r.words.map(w => `<td class="mono">${hex(w)}</td>`).join('')}</tr>`);
+  });
+}
+
+$('careerStageValue').addEventListener('change', e => {
+  writeCareerStage(buf, +e.target.value);
+  renderCareer();
+  showChanges();
+});
+$('markAllWon').addEventListener('click', () => {
+  markAllEventsWon(buf);
+  renderCareer();
+  showChanges();
+});
+$('markUnique').addEventListener('click', () => {
+  markUniquePartsWon(buf);
+  renderCareer();
+  showChanges();
+});
+$('markCareerComplete').addEventListener('click', () => {
+  markCareerComplete(buf);
+  renderCareer();
+  showChanges();
+});
+
+// ------------------------------------------------------------------- garage --
+const gDrop = $('garageDrop'), gFile = $('garageFile');
+gDrop.addEventListener('click', () => gFile.click());
+gDrop.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gFile.click(); }
+});
+gDrop.addEventListener('dragover', e => { e.preventDefault(); gDrop.classList.add('over'); });
+gDrop.addEventListener('dragleave', () => gDrop.classList.remove('over'));
+gDrop.addEventListener('drop', e => {
+  e.preventDefault(); gDrop.classList.remove('over');
+  if (e.dataTransfer.files[0]) loadGarage(e.dataTransfer.files[0]);
+});
+gFile.addEventListener('change', () => gFile.files[0] && loadGarage(gFile.files[0]));
+
+async function loadGarage(file) {
+  gFile.value = '';
+  const data = new Uint8Array(await file.arrayBuffer());
+  const errors = checkGarage(data);
+  if (errors.length) {
+    status($('garageStatus'), errors.join(' '), 'bad');
+    $('garageEditor').hidden = true;
+    return;
+  }
+  gOrig = data; gBuf = data.slice(); gFileName = file.name || 'GARAGE.DAT';
+  status($('garageStatus'), `Loaded ${gFileName} (${data.length.toLocaleString()} bytes).`, 'ok');
+  $('garageEditor').hidden = false;
+  renderGarage();
+  showGarageChanges();
+}
+
+function resetGarage() {
+  gOrig = gBuf = null; gFileName = 'GARAGE.DAT';
+  $('garageEditor').hidden = true;
+  status($('garageStatus'), '', '');
+  status($('garageSaveStatus'), '', '');
+}
+
+function renderGarage() {
+  if (!gBuf) return;
+  const g = readGarage(gBuf);
+  const h = g.header;
+  const slotText = handle => {
+    const info = garageHandleInfo(g, handle, buf);
+    if (!info) return '—';
+    if (info.kind === 'garage') return `garage slot ${info.slot + 6}${info.name ? ` (${info.name})` : ''}`;
+    if (info.kind === 'profile') return `profile slot ${info.slot + 1}${info.name ? ` (${info.name})` : ''}`;
+    return `unknown (0x${handle.toString(16)})`;
+  };
+  $('garageHead').innerHTML =
+    `Version ${h.version}; fingerprint 0x${h.fpHi.toString(16).padStart(8, '0')}${h.fpLo.toString(16).padStart(8, '0')}<br>` +
+    `Drive: ${slotText(h.drive)}; Quick race: ${slotText(h.qr)}; Stand-in: ${slotText(h.stand)}; Extra: ${slotText(h.extra)}`;
+  const tb = $('garage').tBodies[0];
+  tb.innerHTML = '';
+  const names = CAR_TYPES.slice().sort();
+  for (const r of g.records) {
+    const opts = ['—', ...names].map(n => `<option value="${n}" ${n === (r.name || '—') ? 'selected' : ''}>${n}</option>`).join('');
+    const unknownOpt = !r.name && r.hash ? `<option value="__unknown" selected>unknown (0x${r.hash.toString(16)})</option>` : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.slot + 6}</td><td><select data-slot="${r.slot}">${unknownOpt}${opts}</select></td><td><input type="checkbox" data-owned="${r.slot}" ${r.owned ? 'checked' : ''}></td>`;
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll('select').forEach(sel => sel.addEventListener('change', () => {
+    const slot = +sel.dataset.slot;
+    const v = sel.value;
+    if (v === '__unknown') return;
+    writeGarageCar(gBuf, slot, v === '—' ? null : v);
+    writeGarageOwned(gBuf, slot, v !== '—');
+    renderGarage();
+    showGarageChanges();
+  }));
+  tb.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => {
+    writeGarageOwned(gBuf, +cb.dataset.owned, cb.checked);
+    showGarageChanges();
+  }));
+}
+
+function showGarageChanges() {
+  if (!gBuf) return;
+  let n = 0;
+  for (let i = 0; i < gBuf.length; i++) if (gBuf[i] !== gOrig[i]) n++;
+  status($('garageSaveStatus'), n ? `${n.toLocaleString()} byte(s) changed in GARAGE.DAT.` : 'No garage changes yet.', n ? 'warn' : '');
+}
+
+$('garageSave').addEventListener('click', () => {
+  if (!gBuf) return;
+  const blob = new Blob([gBuf], { type: 'application/octet-stream' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = gFileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  status($('garageSaveStatus'), `Downloaded ${gFileName}. Replace GARAGE.DAT in the profile's folder.`, 'ok');
+});
+$('garageRevert').addEventListener('click', () => {
+  if (!gOrig) return;
+  gBuf = gOrig.slice();
+  renderGarage();
+  showGarageChanges();
+});
+
+// ---------------------------------------------------------------------- raw --
 function rawOff() {
   const o = parseInt($('rOff').value.replace(/^0x/i, ''), 16);
   const t = $('rType').value;
@@ -609,7 +1517,7 @@ document.querySelectorAll('[data-cash]').forEach(b => b.addEventListener('click'
 $('saveMode').addEventListener('change', e => { writeSaveMode(buf, e.target.value); render(); });
 $('difficulty').addEventListener('change', e => { writeDifficulty(buf, e.target.value); render(); });
 $('unlockAll').addEventListener('click', () => { unlockAll(buf); render(); });
-$('revert').addEventListener('click', () => { buf = orig.slice(); render(); });
+$('revert').addEventListener('click', () => { buf = orig.slice(); render(); renderCareer(); });
 
 function showChanges() {
   let n = 0;

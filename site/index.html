@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#e8630a">
 <title>NFSU2 Save Editor</title>
-<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
+<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, career events, unique parts, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171b22'/%3E%3Ctext x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%23ff7a1f'%3EN%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -15,9 +15,9 @@
   <header>
     <h1>NFSU2 <span>Save</span> Editor</h1>
     <p>Open a Need for Speed: Underground 2 profile save (the file named after the profile, such as
-      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, save mode,
-      difficulty and more, then save a copy. The file never leaves your browser. The checksums are made
-      again the way the game writes them.</p>
+      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, career events,
+      save mode, difficulty and more, then save a copy. The file never leaves your browser. The checksums
+      are made again the way the game writes them.</p>
   </header>
 
   <section>
@@ -84,11 +84,79 @@
     </section>
 
     <section>
+      <h2>Career</h2>
+      <p class="sub">Decoded from the profile's event list and career block. The event list records the
+        races, cover shoots and unique-part rewards the game has marked as won; ticking one adds it to that
+        list. A tick is the game's won byte (record byte +6), not just a display.</p>
+      <div class="row">
+        <div><label>Current car</label><div id="careerCar" class="mono"></div></div>
+        <div><label>Career stage (from won events)</label><div id="careerStage" class="mono"></div></div>
+        <div><label for="careerStageValue">Career block value (0–6)</label>
+          <select id="careerStageValue">
+            <option value="0">0 (prologue)</option>
+            <option value="1">1 (stage 1)</option>
+            <option value="2">2 (stage 2)</option>
+            <option value="3">3 (stage 3)</option>
+            <option value="4">4 (stage 4 / 5?)</option>
+            <option value="5">5 (career done)</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+      </div>
+      <div id="careerUnique" class="sub"></div>
+      <div class="quick">
+        <button class="primary" id="markAllWon">Mark every race and showcase won</button>
+        <button id="markUnique">Mark unique parts won</button>
+        <button id="markCareerComplete">Finish career (all won, block value 5)</button>
+      </div>
+      <div id="careerSummary" class="sub"></div>
+      <div class="scroll" style="max-height: 420px; overflow-y: auto">
+        <table id="events"><thead><tr><th>Stage</th><th>Type</th><th>Event</th><th>Won</th></tr></thead><tbody></tbody></table>
+      </div>
+      <details>
+        <summary>Career block (19 records of 20 bytes)</summary>
+        <div class="scroll">
+          <table id="careerBlock"><thead><tr><th>Record</th><th>+0</th><th>+4</th><th>+8</th><th>+12</th><th>+16</th></tr></thead><tbody></tbody></table>
+        </div>
+        <p class="sub">The first record is a header: +4 is the current car handle (CAREER_SLOT_n), +8 an
+          unknown handle, +12 is 4 in these saves, +16 flags. The rest look like race results/times; their
+          exact meaning is not mapped yet.</p>
+      </details>
+    </section>
+
+    <section>
       <h2>Cars in this profile</h2>
       <p class="sub">Read-only view of the career, customized and preset cars stored in the save. Type names
-        come from the game's own car table; a hash that is not one of them is a mod car.</p>
+        come from the game's car table and the modded game's car folders; a name marked “(mod)” is a car the
+        stock game does not have.</p>
       <div class="scroll">
         <table id="cars"><thead><tr><th>Slot</th><th>Type</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Garage (GARAGE.DAT)</h2>
+      <p class="sub">Optional: drop the profile's <span class="mono">GARAGE.DAT</span> to see and edit the
+        bonus/garage cars. The file is saved beside the profile; it holds the cars in slots 6–10 (and more in
+        the modded game). The profile editor works without it.</p>
+      <div class="drop" id="garageDrop" tabindex="0" role="button" aria-label="Choose GARAGE.DAT">
+        <strong>Drop GARAGE.DAT here, or click to choose it</strong>
+        Optional; the profile editor works without it
+      </div>
+      <input type="file" id="garageFile" hidden>
+      <div class="status" id="garageStatus"></div>
+      <div id="garageEditor" hidden style="display:grid;gap:12px">
+        <div id="garageHead" class="sub"></div>
+        <div class="scroll">
+          <table id="garage"><thead><tr><th>Slot</th><th>Car</th><th>Owned</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="quick">
+          <button class="primary" id="garageSave">Save edited GARAGE.DAT</button>
+          <button id="garageRevert">Revert garage changes</button>
+        </div>
+        <div class="status" id="garageSaveStatus"></div>
+        <p class="sub">GARAGE.DAT has no checksum; the header fingerprint is left as it is. Replace the file
+          in the profile's folder after downloading.</p>
       </div>
     </section>
 
@@ -131,7 +199,8 @@
     <p>Format and checksums from <a href="https://github.com/th0mk/nfsu2-web" target="_blank" rel="noopener">th0mk/nfsu2-web</a>
       (MIT), based on <a href="https://github.com/TalhaMudo/NFSU2Recomp" target="_blank" rel="noopener">NFSU2Recomp</a>
       and the clean-room <a href="https://github.com/whoismept/OpenUG2" target="_blank" rel="noopener">OpenUG2</a> spec.
-      Unlock runs from NFSU2 Profile Creator 1.1. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
+      Unlock runs from NFSU2 Profile Creator 1.1; race names from GLOBAL/GLOBALB.BUN; mod car names from the
+      modded game's CARS folder. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
   </footer>
 </main>
 <script type="module" src="app.js"></script>
