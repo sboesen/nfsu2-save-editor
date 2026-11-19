@@ -29,6 +29,7 @@ drop.addEventListener('drop', e => {
 fileIn.addEventListener('change', () => fileIn.files[0] && load(fileIn.files[0]));
 
 async function load(file) {
+  fileIn.value = '';
   const data = new Uint8Array(await file.arrayBuffer());
   const errors = checkShape(data);
   if (errors.length) {
@@ -97,7 +98,10 @@ function renderCars() {
 }
 
 function fmtFloat(f) {
-  return Number.isFinite(f) && Math.abs(f) < 1e12 && (f === 0 || Math.abs(f) > 1e-6) ? +f.toPrecision(7) : '—';
+  if (!Number.isFinite(f) || Math.abs(f) >= 1e12) return '—';
+  if (f === 0) return '0';
+  if (Math.abs(f) < 1e-6) return '—';
+  return +f.toPrecision(9);
 }
 
 function renderStats() {
