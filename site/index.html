@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#e8630a">
+<title>NFSU2 Save Editor</title>
+<meta name="description" content="Edit a Need for Speed: Underground 2 profile save: cash, unlocks, save mode, difficulty, cars and raw values. Checksums are made again as the game writes them. Runs in your browser; the file never leaves your device.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171b22'/%3E%3Ctext x='16' y='23' font-size='16' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='%23ff7a1f'%3EN%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>NFSU2 <span>Save</span> Editor</h1>
+    <p>Open a Need for Speed: Underground 2 profile save (the file named after the profile, such as
+      <span class="mono">NFS Underground 2/YourGod/YourGod</span>), change cash, unlocks, save mode,
+      difficulty and more, then save a copy. The file never leaves your browser. The checksums are made
+      again the way the game writes them.</p>
+  </header>
+
+  <section>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a profile file">
+      <strong>Drop a profile file here, or click to choose one</strong>
+      No file extension, 54,966 bytes, starts with "20CM"
+      <input type="file" id="file" hidden>
+    </div>
+    <div class="status" id="loadStatus"></div>
+  </section>
+
+  <div id="editor" hidden style="display:grid;gap:16px">
+    <section>
+      <h2>Profile</h2>
+      <div class="row">
+        <div>
+          <label for="name">Profile name (offset 0xD225)</label>
+          <input id="name" class="mono" readonly>
+        </div>
+        <div>
+          <label for="cash">Cash (offset 0xA16A)</label>
+          <input id="cash" type="number" min="0" max="4294967295" step="1">
+        </div>
+      </div>
+      <div class="quick">
+        <button data-cash="1000000">$1M</button>
+        <button data-cash="10000000">$10M</button>
+        <button data-cash="99999999">$99,999,999</button>
+        <button data-cash="999999999">$999,999,999</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="saveMode">Save (Options, Gameplay, Save)</label>
+          <select id="saveMode">
+            <option value="autosave">Autosave</option>
+            <option value="prompt">Prompt</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div>
+          <label for="difficulty">Career difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+      </div>
+      <p class="sub">The name is stored in the profile; the folder and file must keep the same name, so
+        rename all three if you want a different one.</p>
+    </section>
+
+    <section>
+      <h2>Unlocks</h2>
+      <p class="sub">Sets the same unlock bitfields as the 2005 NFSU2 Profile Creator. Columns are the
+        career's five stages; each cell shows how many bits are already set. Click a cell to unlock that
+        stage. Bytes are set to 0xFF (every bit), as the Profile Creator does.</p>
+      <div class="scroll">
+        <table id="unlocks"><thead><tr><th>Category</th><th>Stage 1</th><th>Stage 2</th><th>Stage 3</th><th>Stage 4</th><th>Stage 5</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="quick"><button class="primary" id="unlockAll">Unlock everything</button></div>
+      <p class="note">If widebody kits stay locked after unlocking all five stages of body parts, the game
+        may also want that stage's unique-part reward, which this does not set.</p>
+    </section>
+
+    <section>
+      <h2>Cars in this profile</h2>
+      <p class="sub">Read-only view of the career, customized and preset cars stored in the save. Type names
+        come from the game's own car table; a hash that is not one of them is a mod car.</p>
+      <div class="scroll">
+        <table id="cars"><thead><tr><th>Slot</th><th>Type</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Values at 0xD155</h2>
+      <p class="sub">Sixteen values stored next to the profile name. Their meaning is not mapped yet, so
+        change them with care. The first one reads as a float; the rest look like integers.</p>
+      <div class="scroll">
+        <table id="stats"><thead><tr><th>Offset</th><th>As integer</th><th>As float</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Raw value at offset</h2>
+      <div class="row">
+        <div><label for="rOff">Offset (hex)</label><input id="rOff" class="mono" value="A16A"></div>
+        <div><label for="rType">Type</label>
+          <select id="rType"><option value="i32">int32</option><option value="u32">uint32</option><option value="u16">uint16</option><option value="u8">uint8</option><option value="f32">float32</option></select>
+        </div>
+        <div><label for="rVal">Value</label><input id="rVal" class="mono"></div>
+        <div class="quick" style="flex:0 0 auto"><button id="rRead">Read</button><button id="rWrite">Write</button></div>
+      </div>
+      <div class="hex mono" id="hex"></div>
+    </section>
+
+    <section>
+      <h2>Save</h2>
+      <div class="quick">
+        <button class="primary" id="save">Save edited profile</button>
+        <button id="revert">Revert all changes</button>
+      </div>
+      <div class="status" id="saveStatus"></div>
+      <p class="sub">The download has the profile's original file name (no extension) and its three
+        checksums made again, so the game accepts it. Back up the original first, then replace the file in
+        the profile's folder.</p>
+    </section>
+  </div>
+
+  <footer>
+    <p>Format and checksums from <a href="https://github.com/th0mk/nfsu2-web" target="_blank" rel="noopener">th0mk/nfsu2-web</a>
+      (MIT), based on <a href="https://github.com/TalhaMudo/NFSU2Recomp" target="_blank" rel="noopener">NFSU2Recomp</a>
+      and the clean-room <a href="https://github.com/whoismept/OpenUG2" target="_blank" rel="noopener">OpenUG2</a> spec.
+      Unlock runs from NFSU2 Profile Creator 1.1. Fan project; not affiliated with or endorsed by Electronic Arts.</p>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
